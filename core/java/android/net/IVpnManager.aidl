@@ -48,7 +48,7 @@ interface IVpnManager {
     /** Always-on VPN APIs */
     boolean isAlwaysOnVpnPackageSupported(int userId, String packageName);
     boolean setAlwaysOnVpnPackage(int userId, String packageName, boolean lockdown,
-            in List<String> lockdownAllowlist);
+            in List<String> lockdownAllowlist, boolean dnsCompatModeEnabled);
     String getAlwaysOnVpnPackage(int userId);
     boolean isVpnLockdownEnabled(int userId);
     List<String> getVpnLockdownAllowlist(int userId);

@@ -415,6 +415,13 @@ public class Vpn {
     @VisibleForTesting protected boolean mLockdown = false;
 
     /**
+     * Whether to allows DNS traffic to the VPN's DNS servers to leak outside the tunnel. Required
+     * by some providers. Has no effect unless {@link mAlwaysOn} and {@link mLockdown} is on.
+     */
+    @GuardedBy("this")
+    @VisibleForTesting protected boolean mDnsCompatModeEnabled = false;
+
+    /**
      * Set of packages in addition to the VPN app itself that can access the network directly when
      * VPN is not connected even if {@code mLockdown} is set.
      */
@@ -775,6 +782,13 @@ public class Vpn {
     }
 
     /**
+     * Returns whether VPN DNS compat mode is enabled.
+     */
+    public synchronized boolean getDnsCompatModeEnabled() {
+        return mDnsCompatModeEnabled;
+    }
+
+    /**
      * Checks if a VPN app supports always-on mode.
      *
      * <p>In order to support the always-on feature, an app has to either have an installed
@@ -898,6 +912,13 @@ public class Vpn {
         return packageName != null && !VpnConfig.LEGACY_VPN.equals(packageName);
     }
 
+    public synchronized boolean setAlwaysOnPackage(
+            @Nullable String packageName,
+            boolean lockdown,
+            @Nullable List<String> lockdownAllowlist) {
+        return setAlwaysOnPackage(packageName, lockdown, lockdownAllowlist, false);
+    }
+
     /**
      * Configures an always-on VPN connection through a specific application. This connection is
      * automatically granted and persisted after a reboot.
@@ -918,7 +939,8 @@ public class Vpn {
     public synchronized boolean setAlwaysOnPackage(
             @Nullable String packageName,
             boolean lockdown,
-            @Nullable List<String> lockdownAllowlist) {
+            @Nullable List<String> lockdownAllowlist,
+            boolean dnsCompatModeEnabled) {
         enforceControlPermissionOrInternalCaller();
         // Store mPackage since it might be reset or might be replaced with the other VPN app.
         final String oldPackage = mPackage;
@@ -1012,6 +1034,7 @@ public class Vpn {
         mLockdownAllowlist = (mLockdown && lockdownAllowlist != null)
                 ? Collections.unmodifiableList(new ArrayList<>(lockdownAllowlist))
                 : Collections.emptyList();
+       // mDnsCompatModeEnabled = (mLockdown)
         mEventChanges.log("[LockdownAlwaysOn] Mode changed: lockdown=" + mLockdown + " alwaysOn="
                 + mAlwaysOn + " calling from " + Binder.getCallingUid());
 
@@ -1022,10 +1045,13 @@ public class Vpn {
             // Lockdown forces the VPN to be non-bypassable (see #agentConnect) because it makes
             // no sense for a VPN to be bypassable when connected but not when not connected.
             // As such, changes in lockdown need to restart the agent.
+            // TODO: Check if compat mode changed
             if (mNetworkAgent != null && oldLockdownState != mLockdown) {
                 startNewNetworkAgent(mNetworkAgent, "Lockdown mode changed");
             }
         } else {
+            // TODO: Test this with Proton and Mullvad. What happens when one is connected and
+            //  set Always on for other?
             // Prepare this app. The notification will update as a side-effect of updateState().
             // It also calls setVpnForcedLocked().
             prepareInternal(packageName);
@@ -1068,6 +1094,8 @@ public class Vpn {
             mSystemServices.settingsSecurePutStringForUser(
                     LOCKDOWN_ALLOWLIST_SETTING_NAME,
                     String.join(",", mLockdownAllowlist), mUserId);
+            mSystemServices.settingsSecurePutIntForUser(Settings.Secure.VPN_DNS_COMPAT_MODE_ENABLED,
+                    (mAlwaysOn && mLockdown && mDnsCompatModeEnabled ? 1 : 0), mUserId);
         } finally {
             Binder.restoreCallingIdentity(token);
         }
@@ -1109,7 +1137,7 @@ public class Vpn {
             }
             // Remove always-on VPN if it's not supported.
             if (!isAlwaysOnPackageSupported(alwaysOnPackage)) {
-                setAlwaysOnPackage(null, false, null);
+                setAlwaysOnPackage(null, false, null, false);
                 return false;
             }
             // Skip if the service is already established. This isn't bulletproof: it's not bound
@@ -1594,6 +1622,7 @@ public class Vpn {
                 .setVpnRequiresValidation(mConfig.requiresInternetValidation)
                 .setLocalRoutesExcludedForVpn(mConfig.excludeLocalRoutes)
                 .setLegacyExtraInfo("VPN:" + mPackage)
+                //.setVpnDnsCompatModeEnabled(mDnsCompatModeEnabled) // TODO: Conditions on setting this?
                 .build();
 
         capsBuilder.setOwnerUid(mOwnerUID);
@@ -1627,6 +1656,7 @@ public class Vpn {
                 networkAgentConfig, mNetworkProvider, validationCallback);
         final long token = Binder.clearCallingIdentity();
         try {
+            // TODO:
             mNetworkAgent.register();
         } catch (final Exception e) {
             // If register() throws, don't keep an unregistered agent.
@@ -4077,7 +4107,7 @@ public class Vpn {
             if (isCurrentIkev2VpnLocked(packageName)) {
                 if (mAlwaysOn) {
                     // Will transitively call prepareInternal(VpnConfig.LEGACY_VPN).
-                    setAlwaysOnPackage(null, false, null);
+                    setAlwaysOnPackage(null, false, null, false);
                 } else {
                     prepareInternal(VpnConfig.LEGACY_VPN);
                 }

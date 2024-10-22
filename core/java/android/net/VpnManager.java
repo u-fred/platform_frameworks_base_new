@@ -560,9 +560,20 @@ public class VpnManager {
     @RequiresPermission(android.Manifest.permission.CONTROL_ALWAYS_ON_VPN)
     public boolean setAlwaysOnVpnPackageForUser(int userId, @Nullable String vpnPackage,
             boolean lockdownEnabled, @Nullable List<String> lockdownAllowlist) {
+        return setAlwaysOnVpnPackageForUser(userId, vpnPackage, lockdownEnabled, lockdownAllowlist,
+                false);
+    }
+
+    /**
+     * @hide
+     */
+    @RequiresPermission(android.Manifest.permission.CONTROL_ALWAYS_ON_VPN)
+    public boolean setAlwaysOnVpnPackageForUser(int userId, @Nullable String vpnPackage,
+            boolean lockdownEnabled, @Nullable List<String> lockdownAllowlist,
+            boolean dnsCompatModeEnabled) {
         try {
             return mService.setAlwaysOnVpnPackage(
-                    userId, vpnPackage, lockdownEnabled, lockdownAllowlist);
+                    userId, vpnPackage, lockdownEnabled, lockdownAllowlist, dnsCompatModeEnabled);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

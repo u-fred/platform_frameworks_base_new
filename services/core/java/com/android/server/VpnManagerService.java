@@ -260,7 +260,7 @@ public class VpnManagerService extends IVpnManager.Stub {
         try {
             if (vpnType != VpnManager.TYPE_VPN_NONE && packageName != null
                     && !packageName.equals(getAlwaysOnVpnPackage(userId))) {
-                setAlwaysOnVpnPackage(userId, packageName, true, null);
+                setAlwaysOnVpnPackage(userId, packageName, true, null, false);
             }
         } finally {
             Binder.restoreCallingIdentity(token);
@@ -600,9 +600,36 @@ public class VpnManagerService extends IVpnManager.Stub {
         }
     }
 
+    // TODO: Synchronized method or synchronized on mVpns?
+    public boolean setVpnDnsCompatModeEnabled(int userId, String packageName,
+            boolean enabled) {
+        synchronized (mVpns) {
+            Vpn vpn = mVpns.get(userId);
+            if (vpn == null) {
+                logw("User " + userId + " has no Vpn configuration");
+                return false;
+            }
+        }
+        /*
+        if (isCurrentPreparedPackage(packageName)) {
+            updateAlwaysOnNotification(mNetworkInfo.getDetailedState());
+            setVpnForcedLocked(mLockdown);
+            // Lockdown forces the VPN to be non-bypassable (see #agentConnect) because it makes
+            // no sense for a VPN to be bypassable when connected but not when not connected.
+            // As such, changes in lockdown need to restart the agent.
+            // TODO: Check if compat mode changed
+            if (mNetworkAgent != null && oldLockdownState != mLockdown) {
+                Log.d("VdcDebug", "lockdown state changed, starting new agent");
+                startNewNetworkAgent(mNetworkAgent, "Lockdown mode changed");
+            }
+         */
+        return true;
+    }
+
     @Override
     public boolean setAlwaysOnVpnPackage(
-            int userId, String packageName, boolean lockdown, List<String> lockdownAllowlist) {
+            int userId, String packageName, boolean lockdown, List<String> lockdownAllowlist,
+            boolean dnsCompatModeEnabled) {
         enforceControlAlwaysOnVpnPermission();
         enforceCrossUserPermission(userId);
 
@@ -617,11 +644,12 @@ public class VpnManagerService extends IVpnManager.Stub {
                 logw("User " + userId + " has no Vpn configuration");
                 return false;
             }
-            if (!vpn.setAlwaysOnPackage(packageName, lockdown, lockdownAllowlist)) {
+            if (!vpn.setAlwaysOnPackage(packageName, lockdown, lockdownAllowlist,
+                    dnsCompatModeEnabled)) {
                 return false;
             }
             if (!startAlwaysOnVpn(userId)) {
-                vpn.setAlwaysOnPackage(null, false, null);
+                vpn.setAlwaysOnPackage(null, false, null, false);
                 return false;
             }
         }
@@ -897,7 +925,7 @@ public class VpnManagerService extends IVpnManager.Stub {
             if (TextUtils.equals(vpn.getAlwaysOnPackage(), packageName)) {
                 log("Removing always-on VPN package " + packageName + " for user "
                         + userId);
-                vpn.setAlwaysOnPackage(null, false, null);
+                vpn.setAlwaysOnPackage(null, false, null, false);
             }
 
             vpn.refreshPlatformVpnAppExclusionList();
@@ -984,7 +1012,7 @@ public class VpnManagerService extends IVpnManager.Stub {
         synchronized (mVpns) {
             final String alwaysOnPackage = getAlwaysOnVpnPackage(userId);
             if (alwaysOnPackage != null) {
-                setAlwaysOnVpnPackage(userId, null, false, null);
+                setAlwaysOnVpnPackage(userId, null, false, null, false);
                 setVpnPackageAuthorization(alwaysOnPackage, userId, VpnManager.TYPE_VPN_NONE);
             }
 

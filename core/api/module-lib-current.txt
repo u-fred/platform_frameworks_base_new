@@ -390,6 +390,10 @@ package android.os {
     method @RequiresPermission(anyOf={android.net.NetworkStack.PERMISSION_MAINLINE_NETWORK_STACK, android.Manifest.permission.NETWORK_STACK}) public void reportNetworkInterfaceForTransports(@NonNull String, @NonNull int[]) throws java.lang.RuntimeException;
   }
 
+  public class Binder implements android.os.IBinder {
+    method @Nullable public final android.os.IBinder getExtension();
+  }
+
   public class BluetoothServiceManager {
     method @NonNull public android.os.BluetoothServiceManager.ServiceRegisterer getBluetoothManagerServiceRegisterer();
   }
@@ -415,6 +419,10 @@ package android.os {
 
   public class Environment {
     method @FlaggedApi("android.crashrecovery.flags.enable_crashrecovery") @NonNull public static java.io.File getDataSystemDeDirectory();
+  }
+
+  public interface IBinder {
+    method @Nullable public default android.os.IBinder getExtension() throws android.os.RemoteException;
   }
 
   public class IpcDataCache<Query, Result> {
